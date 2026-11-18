@@ -15,13 +15,11 @@ async function bootstrap() {
   });
   const loggerService = app.get(LoggerService);
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://uni-chatbot.ajay.works',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean) as string[],
+    origin: (origin, callback) => callback(null, true),
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: '*',
+    exposedHeaders: '*',
   });
   app.setGlobalPrefix('db');
   app.useGlobalPipes(
