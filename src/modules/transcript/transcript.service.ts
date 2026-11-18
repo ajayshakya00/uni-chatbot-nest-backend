@@ -42,7 +42,7 @@ export interface SearchResponse {
 const EMBEDDING_DIM = 768;
 const EMBEDDING_BATCH_SIZE = 32;
 const DEFAULT_SEARCH_LIMIT = 5;
-const SIMILARITY_THRESHOLD = 0.22;
+const SIMILARITY_THRESHOLD = 0.45;
 
 @Injectable()
 export class TranscriptService {

@@ -9,11 +9,17 @@ import { TranscriptModule } from 'src/modules/transcript/transcript.module';
 import { NewsModule } from 'src/modules/news/news.module';
 import { LoggerModule } from 'src/core/services/logger/logger.module';
 import { HttpExceptionFilter } from 'src/core/filters/http-exception.filter';
+import { ObserveModule } from '../../observe';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    ObserveModule.forRoot({
+      appKey: process.env.OBSERVE_APP_KEY!,
+      appSecret: process.env.OBSERVE_APP_SECRET!,
+      serviceId: 'uni-chatbot',
     }),
     DbModule,
     LoggerModule,

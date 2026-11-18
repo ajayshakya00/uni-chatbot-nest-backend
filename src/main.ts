@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/api/app.module';
+import { ObserveInstrument } from './observe';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { LoggerInterceptor } from './core/services/logger/logger.interceptor';
@@ -8,7 +10,9 @@ import { LoggerService } from './core/services/logger/logger.service';
 async function bootstrap() {
   const logger = new Logger('App');
   const port = process.env.PORT ?? 3000;
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    instrument: ObserveInstrument,
+  });
   const loggerService = app.get(LoggerService);
   app.enableCors({
     origin: [
