@@ -322,6 +322,9 @@ export class TranscriptService {
       return data.embeddings;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[callEmbed] Python service failed (${msg}), trying direct Gemini embedding`);
+      const direct = await this.embedViaGeminiDirect(texts, false);
+      if (direct && direct.length === texts.length) return direct;
       this.logger.warn(`[callEmbed] Failed (using placeholder): ${msg}`);
       return texts.map((t) => this.embedPlaceholderSync(t));
     }
@@ -339,9 +342,73 @@ export class TranscriptService {
       if (data?.embeddings?.[0]) return data.embeddings[0];
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[getQueryEmbedding] Failed (using placeholder): ${msg}`);
+      this.logger.warn(`[getQueryEmbedding] Python service failed (${msg}), trying direct Gemini embedding`);
     }
+
+    try {
+      const direct = await this.embedViaGeminiDirect([text], true);
+      if (direct?.[0]) {
+        this.logger.log(`[getQueryEmbedding] Successfully embedded via direct Gemini API`);
+        return direct[0];
+      }
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[getQueryEmbedding] Direct Gemini embedding failed: ${msg}`);
+    }
+
+    this.logger.warn(`[getQueryEmbedding] Falling back to placeholder hash vector`);
     return this.embedPlaceholderSync(text);
+  }
+
+  private async embedViaGeminiDirect(
+    texts: string[],
+    isQuery = false,
+  ): Promise<number[][] | null> {
+    const apiKey =
+      this.config.get<string>('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+
+    const rawModel =
+      this.config.get<string>('GEMINI_EMBEDDING_MODEL') ||
+      process.env.GEMINI_EMBEDDING_MODEL ||
+      'models/gemini-embedding-001';
+    const model = rawModel.startsWith('models/') ? rawModel : `models/${rawModel}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:batchEmbedContents?key=${apiKey}`;
+
+    const requests = texts.map((t) => ({
+      model,
+      content: { parts: [{ text: t }] },
+      taskType: isQuery ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT',
+      outputDimensionality: EMBEDDING_DIM,
+    }));
+
+    try {
+      this.logger.log(
+        `[embedViaGeminiDirect] Calling Gemini directly for ${texts.length} texts`,
+      );
+      const { data } = await firstValueFrom(
+        this.httpService.post<{ embeddings?: { values?: number[] }[] }>(
+          url,
+          { requests },
+          { timeout: 30000, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const rawEmbeddings = data?.embeddings;
+      if (!rawEmbeddings || rawEmbeddings.length !== texts.length) {
+        throw new Error(`Direct Gemini embedding returned invalid count`);
+      }
+
+      return rawEmbeddings.map((item) => {
+        const values = item?.values || [];
+        const norm = Math.sqrt(values.reduce((s, x) => s + x * x, 0)) || 1;
+        return values.map((x) => x / norm);
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[embedViaGeminiDirect] Direct Gemini embedding failed: ${msg}`);
+      return null;
+    }
   }
 
   private embedPlaceholderSync(text: string): number[] {
